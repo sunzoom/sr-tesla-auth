@@ -1,9 +1,15 @@
 name: Powerwall Mode Auto
 
 on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Powerwall mode to set'
+        required: true
+        default: 'self_consumption'
   schedule:
     # 05:30 UK time (UTC)
-    - cron: '55 15 * * *'
+    - cron: '05 16 * * *'
 
 jobs:
   set-self-use:

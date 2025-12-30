@@ -1,44 +1,85 @@
-name: Powerwall Automation
+name: Powerwall Automation DST-aware with Octopus Go
 
-# Allow manual dispatch and scheduled automation
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'Action to perform'
+        description: 'Manual action: auto, charge, self_use'
         required: true
-        default: 'self_use' # options: self_use or charge
+        default: 'auto'
   schedule:
-    # 23:30 UTC winter (backup reserve)
-    - cron: '30 23 * * *'
-    # 05:30 UTC winter (self-use mode)
-    - cron: '30 5 * * *'
+    - cron: '0 * * * *'  # hourly schedule, workflow will filter UK local time
 
 jobs:
   powerwall:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Set Powerwall via Teslemetry
+      - name: Setup log
+        run: echo "Powerwall Automation Run - $(date)" > $GITHUB_WORKSPACE/powerwall-log.txt
+
+      - name: Determine UK local time
+        id: timecheck
         run: |
-          # Select action based on workflow_dispatch input or scheduled time
-          if [ "${{ github.event.inputs.action }}" = "charge" ]; then
+          UK_HOUR=$(TZ="Europe/London" date +'%H')
+          UK_MIN=$(TZ="Europe/London" date +'%M')
+          echo "UK local time: $UK_HOUR:$UK_MIN" | tee -a $GITHUB_WORKSPACE/powerwall-log.txt
+
+          # Determine action automatically
+          if [ "$UK_HOUR" -eq 23 ] && [ "$UK_MIN" -eq 30 ]; then
+            echo "run_action=charge" >> $GITHUB_OUTPUT
+          elif [ "$UK_HOUR" -eq 5 ] && [ "$UK_MIN" -eq 30 ]; then
+            echo "run_action=self_use" >> $GITHUB_OUTPUT
+          else
+            echo "run_action=none" >> $GITHUB_OUTPUT
+
+      - name: Run Powerwall action
+        if: steps.timecheck.outputs.run_action != 'none' || github.event_name == 'workflow_dispatch'
+        run: |
+          LOGFILE="$GITHUB_WORKSPACE/powerwall-log.txt"
+
+          ACTION="${{ github.event.inputs.action }}"
+          if [ "$ACTION" = "auto" ]; then
+            ACTION="${{ steps.timecheck.outputs.run_action }}"
+          fi
+
+          if [ "$ACTION" = "charge" ]; then
             JSON_BODY="{\"backup_reserve_percent\":80}"
             URL="https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/backup"
-            ACTION_DESC="Set backup reserve to 80%"
-          else
+            ACTION_DESC="Set backup reserve to 80% for Octopus Go"
+          elif [ "$ACTION" = "self_use" ]; then
             JSON_BODY="{\"default_real_mode\":\"self_consumption\"}"
             URL="https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/operation"
             ACTION_DESC="Set Powerwall mode to Self-Powered"
+          else
+            echo "No action to run at this time." | tee -a $LOGFILE
+            exit 0
           fi
 
-          echo "Performing action: $ACTION_DESC"
-          echo "JSON payload: $JSON_BODY"
+          echo "Performing action: $ACTION_DESC" | tee -a $LOGFILE
+          echo "JSON payload: $JSON_BODY" | tee -a $LOGFILE
 
-          # Send POST request
           RESPONSE=$(curl -s -X POST "$URL" \
             -H "Authorization: Bearer ${{ secrets.TESLEMETRY_API_KEY }}" \
             -H "Content-Type: application/json" \
+            -w "\nHTTP_STATUS:%{http_code}" \
             -d "$JSON_BODY")
 
-          echo "API response: $RESPONSE"
+          HTTP_STATUS=$(echo "$RESPONSE" | grep HTTP_STATUS | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | sed '/HTTP_STATUS/d')
+
+          echo "API response body: $BODY" | tee -a $LOGFILE
+          echo "HTTP status code: $HTTP_STATUS" | tee -a $LOGFILE
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "✅ Action succeeded" | tee -a $LOGFILE
+          else
+            echo "❌ Action failed" | tee -a $LOGFILE
+            exit 1
+
+      - name: Upload log artifact
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: powerwall-log-${{ github.run_id }}
+          path: $GITHUB_WORKSPACE/powerwall-log.txt

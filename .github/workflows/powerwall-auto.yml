@@ -1,4 +1,4 @@
-name: Powerwall Automation DST-aware with Octopus Go
+name: Powerwall Automation DST-aware with Logging
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
         required: true
         default: 'auto'
   schedule:
-    - cron: '0 * * * *'  # hourly schedule, workflow will filter UK local time
+    - cron: '0 * * * *'  # hourly schedule; workflow filters UK local time
 
 jobs:
   powerwall:
@@ -25,7 +25,6 @@ jobs:
           UK_MIN=$(TZ="Europe/London" date +'%M')
           echo "UK local time: $UK_HOUR:$UK_MIN" | tee -a $GITHUB_WORKSPACE/powerwall-log.txt
 
-          # Determine action automatically
           if [ "$UK_HOUR" -eq 23 ] && [ "$UK_MIN" -eq 30 ]; then
             echo "run_action=charge" >> $GITHUB_OUTPUT
           elif [ "$UK_HOUR" -eq 5 ] && [ "$UK_MIN" -eq 30 ]; then
@@ -79,7 +78,7 @@ jobs:
 
       - name: Upload log artifact
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: powerwall-log-${{ github.run_id }}
           path: $GITHUB_WORKSPACE/powerwall-log.txt

@@ -1,4 +1,4 @@
-name: Powerwall Automation Simple Echo
+name: Powerwall Automation Echo Only
 
 on:
   workflow_dispatch:
@@ -8,14 +8,14 @@ on:
         required: true
         default: 'auto'
   schedule:
-    - cron: '0 * * * *'  # hourly schedule; workflow filters UK local time
+    - cron: '0 * * * *'  # hourly schedule, DST logic will filter
 
 jobs:
   powerwall:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Determine UK local time (DST-aware)
+      # 1️⃣ Determine UK local time
       - name: Determine UK local time
         id: timecheck
         shell: bash
@@ -25,11 +25,11 @@ jobs:
           echo "UK local time: $UK_HOUR:$UK_MIN"
 
           if [ "$UK_HOUR" -eq 23 ] && [ "$UK_MIN" -eq 30 ]; then
-            echo "run_action=charge" >> $GITHUB_OUTPUT
+            echo "::set-output name=run_action::charge"
           elif [ "$UK_HOUR" -eq 5 ] && [ "$UK_MIN" -eq 30 ]; then
-            echo "run_action=self_use" >> $GITHUB_OUTPUT
+            echo "::set-output name=run_action::self_use"
           else
-            echo "run_action=none" >> $GITHUB_OUTPUT
+            echo "::set-output name=run_action::none"
 
       # 2️⃣ Run Powerwall action
       - name: Run Powerwall action

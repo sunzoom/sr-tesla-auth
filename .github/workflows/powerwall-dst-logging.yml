@@ -26,6 +26,7 @@ jobs:
       # 2️⃣ Determine UK local time
       - name: Determine UK local time
         id: timecheck
+        shell: bash
         run: |
           UK_HOUR=$(TZ="Europe/London" date +'%H')
           UK_MIN=$(TZ="Europe/London" date +'%M')

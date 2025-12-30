@@ -1,0 +1,44 @@
+name: Powerwall Automation
+
+# Allow manual dispatch and scheduled automation
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'self_use' # options: self_use or charge
+  schedule:
+    # 23:30 UTC winter (backup reserve)
+    - cron: '30 23 * * *'
+    # 05:30 UTC winter (self-use mode)
+    - cron: '30 5 * * *'
+
+jobs:
+  powerwall:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set Powerwall via Teslemetry
+        run: |
+          # Select action based on workflow_dispatch input or scheduled time
+          if [ "${{ github.event.inputs.action }}" = "charge" ]; then
+            JSON_BODY="{\"backup_reserve_percent\":80}"
+            URL="https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/backup"
+            ACTION_DESC="Set backup reserve to 80%"
+          else
+            JSON_BODY="{\"default_real_mode\":\"self_consumption\"}"
+            URL="https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/operation"
+            ACTION_DESC="Set Powerwall mode to Self-Powered"
+          fi
+
+          echo "Performing action: $ACTION_DESC"
+          echo "JSON payload: $JSON_BODY"
+
+          # Send POST request
+          RESPONSE=$(curl -s -X POST "$URL" \
+            -H "Authorization: Bearer ${{ secrets.TESLEMETRY_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "$JSON_BODY")
+
+          echo "API response: $RESPONSE"

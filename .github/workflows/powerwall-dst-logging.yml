@@ -1,4 +1,4 @@
-name: Powerwall Automation DST-aware with Logging
+name: Powerwall Automation Simple Logging
 
 env:
   LOGFILE: ${{ github.workspace }}/powerwall-log.txt
@@ -11,19 +11,18 @@ on:
         required: true
         default: 'auto'
   schedule:
-    - cron: '0 * * * *'  # hourly schedule; workflow filters UK local time
+    - cron: '0 * * * *'
 
 jobs:
   powerwall:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Ensure log file exists
-      - name: Setup log
-        run: |
-          echo "Powerwall Automation Run - $(date)" > $LOGFILE
+      # 1️⃣ Create log file if missing
+      - name: Ensure log file exists
+        run: echo "Powerwall Automation Run - $(date)" > $LOGFILE
 
-      # 2️⃣ Determine UK local time
+      # 2️⃣ Determine UK local time (DST-aware)
       - name: Determine UK local time
         id: timecheck
         shell: bash
@@ -42,37 +41,35 @@ jobs:
       # 3️⃣ Run Powerwall action
       - name: Run Powerwall action
         if: github.event_name == 'workflow_dispatch' || steps.timecheck.outputs.run_action != 'none'
+        shell: bash
         run: |
-          # Ensure log file exists
-          touch $LOGFILE
-
-          # Determine action
           ACTION="${{ github.event.inputs.action }}"
           if [ "$ACTION" = "auto" ]; then
             ACTION="${{ steps.timecheck.outputs.run_action }}"
           fi
 
+          # Exit if nothing to do
           if [ "$ACTION" = "none" ]; then
             echo "No action to run at this time." | tee -a $LOGFILE
             exit 0
           fi
 
+          # Determine API URL and payload
           if [ "$ACTION" = "charge" ]; then
-            JSON_BODY="{\"backup_reserve_percent\":80}"
             URL="https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/backup"
+            JSON_BODY='{"backup_reserve_percent":80}'
             ACTION_DESC="Set backup reserve to 80% for Octopus Go"
           elif [ "$ACTION" = "self_use" ]; then
-            JSON_BODY="{\"default_real_mode\":\"self_consumption\"}"
             URL="https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/operation"
+            JSON_BODY='{"default_real_mode":"self_consumption"}'
             ACTION_DESC="Set Powerwall mode to Self-Powered"
           else
             echo "Unknown action: $ACTION" | tee -a $LOGFILE
             exit 1
           fi
 
+          # Run API call and log
           echo "Performing action: $ACTION_DESC" | tee -a $LOGFILE
-          echo "JSON payload: $JSON_BODY" | tee -a $LOGFILE
-
           RESPONSE=$(curl -s -X POST "$URL" \
             -H "Authorization: Bearer ${{ secrets.TESLEMETRY_API_KEY }}" \
             -H "Content-Type: application/json" \

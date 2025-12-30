@@ -2,17 +2,17 @@ name: Powerwall Mode Auto
 
 on:
   schedule:
-    # UTC schedule for 05:30 UK time
-    - cron: '45 15 * * *'
+    # 05:30 UK time (UTC)
+    - cron: '50 15 * * *'
 
 jobs:
-  set‑self‑use:
-    runs‑on: ubuntu‑latest
+  set-self-use:
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Set Powerwall to Self‑Powered
+      - name: Set Powerwall to Self-Powered
         run: |
           curl -X POST "https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/operation" \
             -H "Authorization: Bearer ${{ secrets.TESLEMETRY_API_KEY }}" \
-            -H "Content‑Type: application/x‑www‑form‑urlencoded" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
             -d "default_real_mode=${{ secrets.DEFAULT_REAL_MODE }}"

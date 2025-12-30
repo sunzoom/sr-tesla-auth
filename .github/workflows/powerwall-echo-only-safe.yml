@@ -75,3 +75,6 @@ jobs:
           else
             echo "❌ Action failed"
             exit 1
+          fi
+
+          true

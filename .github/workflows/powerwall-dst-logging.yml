@@ -28,7 +28,6 @@ jobs:
         id: timecheck
         shell: bash
         run: |
-          #!/usr/bin/env bash
           UK_HOUR=$(TZ="Europe/London" date +'%H')
           UK_MIN=$(TZ="Europe/London" date +'%M')
           echo "UK local time: $UK_HOUR:$UK_MIN" | tee -a $LOGFILE
@@ -47,6 +46,7 @@ jobs:
           # Ensure log file exists
           touch $LOGFILE
 
+          # Determine action
           ACTION="${{ github.event.inputs.action }}"
           if [ "$ACTION" = "auto" ]; then
             ACTION="${{ steps.timecheck.outputs.run_action }}"

@@ -28,6 +28,7 @@ jobs:
         id: timecheck
         shell: bash
         run: |
+          #!/usr/bin/env bash
           UK_HOUR=$(TZ="Europe/London" date +'%H')
           UK_MIN=$(TZ="Europe/London" date +'%M')
           echo "UK local time: $UK_HOUR:$UK_MIN" | tee -a $LOGFILE
@@ -41,13 +42,11 @@ jobs:
 
       # 3️⃣ Run Powerwall action
       - name: Run Powerwall action
-        # Always run on manual dispatch; otherwise DST check controls it
         if: github.event_name == 'workflow_dispatch' || steps.timecheck.outputs.run_action != 'none'
         run: |
           # Ensure log file exists
           touch $LOGFILE
 
-          # Determine action
           ACTION="${{ github.event.inputs.action }}"
           if [ "$ACTION" = "auto" ]; then
             ACTION="${{ steps.timecheck.outputs.run_action }}"

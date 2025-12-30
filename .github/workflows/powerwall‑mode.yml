@@ -3,7 +3,7 @@ name: Powerwall Mode Auto
 on:
   schedule:
     # UTC schedule for 05:30 UK time
-    - cron: '30 5 * * *'
+    - cron: '45 15 * * *'
 
 jobs:
   set‑self‑use:

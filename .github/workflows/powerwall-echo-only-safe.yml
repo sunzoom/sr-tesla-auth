@@ -1,0 +1,77 @@
+name: Powerwall Automation Echo Only (Safe)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Manual action: auto, charge, self_use'
+        required: true
+        default: 'auto'
+  schedule:
+    - cron: '0 * * * *'
+
+jobs:
+  powerwall:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run Powerwall automation
+        run: |
+          # Determine UK time
+          UK_HOUR=$(TZ="Europe/London" date +'%H')
+          UK_MIN=$(TZ="Europe/London" date +'%M')
+          echo "UK local time: $UK_HOUR:$UK_MIN"
+
+          # Determine action
+          ACTION="${{ github.event.inputs.action }}"
+          if [ "$ACTION" = "auto" ]; then
+            if [ "$UK_HOUR" -eq 23 ] && [ "$UK_MIN" -eq 30 ]; then
+              ACTION="charge"
+            elif [ "$UK_HOUR" -eq 5 ] && [ "$UK_MIN" -eq 30 ]; then
+              ACTION="self_use"
+            else
+              ACTION="none"
+            fi
+          fi
+
+          echo "Selected action: $ACTION"
+
+          if [ "$ACTION" = "none" ]; then
+            echo "No action to run at this time."
+            exit 0
+          fi
+
+          # Determine API URL and payload
+          if [ "$ACTION" = "charge" ]; then
+            URL="https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/backup"
+            JSON_BODY='{"backup_reserve_percent":80}'
+            ACTION_DESC="Set backup reserve to 80% for Octopus Go"
+          elif [ "$ACTION" = "self_use" ]; then
+            URL="https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/operation"
+            JSON_BODY='{"default_real_mode":"self_consumption"}'
+            ACTION_DESC="Set Powerwall mode to Self-Powered"
+          else
+            echo "Unknown action: $ACTION"
+            exit 1
+          fi
+
+          echo "Performing action: $ACTION_DESC"
+          echo "JSON payload: $JSON_BODY"
+
+          RESPONSE=$(curl -s -X POST "$URL" \
+            -H "Authorization: Bearer ${{ secrets.TESLEMETRY_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -w "\nHTTP_STATUS:%{http_code}" \
+            -d "$JSON_BODY")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | grep HTTP_STATUS | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | sed '/HTTP_STATUS/d')
+
+          echo "API response body: $BODY"
+          echo "HTTP status code: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "✅ Action succeeded"
+          else
+            echo "❌ Action failed"
+            exit 1

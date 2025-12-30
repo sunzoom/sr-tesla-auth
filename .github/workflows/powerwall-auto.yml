@@ -90,4 +90,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: powerwall-log-${{ github.run_id }}
-          path: $LOGFILE
+          path: ${{ env.LOGFILE }}

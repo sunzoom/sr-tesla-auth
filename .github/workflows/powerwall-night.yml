@@ -46,12 +46,5 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"default_real_mode":"autonomous"}'
 
-          # 3) Enable grid charging
-          curl -s -X POST \
-            "https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/grid_charging" \
-            -H "Authorization: Bearer ${{ secrets.TESLEMETRY_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d '{"grid_charging_enabled":true}'
-
           echo "Night charging (Autonomous mode) applied"
           true

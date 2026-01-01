@@ -7,8 +7,8 @@ on:
         description: 'Manual action: auto, charge, self_use'
         required: true
         default: 'auto'
-  schedule:
-    - cron: '0 * * * *'
+ # schedule:
+ #   - cron: '0 * * * *'
 
 jobs:
   powerwall:

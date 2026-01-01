@@ -1,0 +1,48 @@
+name: Powerwall Morning Restore (Aligned)
+
+on:
+  schedule:
+    - cron: '0-40/10 4 * * *'
+    - cron: '0-40/10 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  morning_restore:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Morning restore aligned to 05:30
+        run: |
+          TARGET_MINUTES=$((5*60+30))
+          NOW_MINUTES=$(TZ="Europe/London" date +%H:%M | awk -F: '{print $1*60+$2}')
+          DELTA=$((TARGET_MINUTES - NOW_MINUTES))
+
+          echo "Now (UK minutes): $NOW_MINUTES"
+          echo "Target (UK minutes): $TARGET_MINUTES"
+
+          if [ "$DELTA" -gt 15 ]; then
+            echo "Too early — exiting"
+            exit 0
+          fi
+
+          if [ "$DELTA" -gt 0 ]; then
+            echo "Sleeping $DELTA minutes to align with 05:30"
+            sleep $((DELTA*60))
+          fi
+
+          echo "Applying morning restore settings"
+
+          curl -s -X POST \
+            "https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/backup" \
+            -H "Authorization: Bearer ${{ secrets.TESLEMETRY_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"backup_reserve_percent":5}'
+
+          curl -s -X POST \
+            "https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/grid_charging" \
+            -H "Authorization: Bearer ${{ secrets.TESLEMETRY_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"grid_charging_enabled":false}'
+
+          echo "Morning restore aligned and applied"
+          true

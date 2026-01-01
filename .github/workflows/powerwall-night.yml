@@ -1,0 +1,54 @@
+name: Powerwall Night Charging (Aligned)
+
+on:
+  schedule:
+    - cron: '20-59/10 22 * * *'
+    - cron: '0-10/10 23 * * *'
+  workflow_dispatch:
+
+jobs:
+  night_charge:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Night charging aligned to 23:30
+        run: |
+          TARGET_MINUTES=$((23*60+30))
+          NOW_MINUTES=$(TZ="Europe/London" date +%H:%M | awk -F: '{print $1*60+$2}')
+          DELTA=$((TARGET_MINUTES - NOW_MINUTES))
+
+          echo "Now (UK minutes): $NOW_MINUTES"
+          echo "Target (UK minutes): $TARGET_MINUTES"
+
+          if [ "$DELTA" -gt 15 ]; then
+            echo "Too early — exiting"
+            exit 0
+          fi
+
+          if [ "$DELTA" -gt 0 ]; then
+            echo "Sleeping $DELTA minutes to align with 23:30"
+            sleep $((DELTA*60))
+          fi
+
+          echo "Applying night charging settings"
+
+          curl -s -X POST \
+            "https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/backup" \
+            -H "Authorization: Bearer ${{ secrets.TESLEMETRY_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"backup_reserve_percent":80}'
+
+          curl -s -X POST \
+            "https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/operation" \
+            -H "Authorization: Bearer ${{ secrets.TESLEMETRY_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"default_real_mode":"self_consumption"}'
+
+          curl -s -X POST \
+            "https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/grid_charging" \
+            -H "Authorization: Bearer ${{ secrets.TESLEMETRY_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"grid_charging_enabled":true}'
+
+          echo "Night charging aligned and applied"
+          true

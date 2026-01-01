@@ -1,4 +1,4 @@
-name: Powerwall Night Charging (Aligned)
+name: Powerwall Night Charging (Autonomous Mode)
 
 on:
   schedule:
@@ -11,14 +11,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Night charging aligned to 23:30
+      - name: Night charging aligned to 23:30 (Autonomous)
         run: |
           TARGET_MINUTES=$((23*60+30))
           NOW_MINUTES=$(TZ="Europe/London" date +%H:%M | awk -F: '{print $1*60+$2}')
           DELTA=$((TARGET_MINUTES - NOW_MINUTES))
 
-          echo "Now (UK minutes): $NOW_MINUTES"
-          echo "Target (UK minutes): $TARGET_MINUTES"
+          echo "UK minutes now: $NOW_MINUTES"
+          echo "UK target minutes: $TARGET_MINUTES"
 
           if [ "$DELTA" -gt 15 ]; then
             echo "Too early — exiting"
@@ -30,25 +30,28 @@ jobs:
             sleep $((DELTA*60))
           fi
 
-          echo "Applying night charging settings"
+          echo "Applying night charging configuration (Autonomous)"
 
+          # 1) Backup reserve to 80%
           curl -s -X POST \
             "https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/backup" \
             -H "Authorization: Bearer ${{ secrets.TESLEMETRY_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{"backup_reserve_percent":80}'
 
+          # 2) Switch to Autonomous / Time-Based Control
           curl -s -X POST \
             "https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/operation" \
             -H "Authorization: Bearer ${{ secrets.TESLEMETRY_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{"default_real_mode":"self_consumption"}'
+            -d '{"default_real_mode":"autonomous"}'
 
+          # 3) Enable grid charging
           curl -s -X POST \
             "https://api.teslemetry.com/api/1/energy_sites/${{ secrets.TESLEMETRY_SITE_ID }}/grid_charging" \
             -H "Authorization: Bearer ${{ secrets.TESLEMETRY_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{"grid_charging_enabled":true}'
 
-          echo "Night charging aligned and applied"
+          echo "Night charging (Autonomous mode) applied"
           true
